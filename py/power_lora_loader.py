@@ -2,7 +2,7 @@ from nodes import LoraLoader
 from .constants import get_category, get_name
 from .power_prompt_utils import get_lora_by_filename
 from .utils import FlexibleOptionalInputType, any_type
-
+from .utils import load_and_save_tags
 
 class RgthreePowerLoraLoader:
   """ The Power Lora Loader is a powerful, flexible node to add multiple loras to a model/clip."""
@@ -22,17 +22,18 @@ class RgthreePowerLoraLoader:
       "hidden": {},
     }
 
-  RETURN_TYPES = ("MODEL", "CLIP")
-  RETURN_NAMES = ("MODEL", "CLIP")
+  RETURN_TYPES = ("MODEL", "CLIP", "STRING")
+  RETURN_NAMES = ("MODEL", "CLIP", "TRIGGERS")
   FUNCTION = "load_loras"
 
   def load_loras(self, model, clip, **kwargs):
+    civitai_trigger_list = []
     """Loops over the provided loras in kwargs and applies valid ones."""
     for key, value in kwargs.items():
       key = key.upper()
       if key.startswith('LORA_') and 'on' in value and 'lora' in value and 'strength' in value:
         strength_model = value['strength']
-        # If we just passed one strtength value, then use it for both, if we passed a strengthTwo
+        # If we just passed one strength value, then use it for both, if we passed a strengthTwo
         # as well, then our `strength` will be for the model, and `strengthTwo` for clip.
         strength_clip = value['strengthTwo'] if 'strengthTwo' in value and value[
           'strengthTwo'] is not None else strength_model
@@ -40,5 +41,8 @@ class RgthreePowerLoraLoader:
           lora = get_lora_by_filename(value['lora'], log_node=self.NAME)
           if lora is not None:
             model, clip = LoraLoader().load_lora(model, clip, lora, strength_model, strength_clip)
+            civitai_trigger_list += load_and_save_tags(value['lora'], False)
 
-    return (model, clip)
+    triggers = ", ".join(civitai_trigger_list)
+
+    return (model, clip, triggers)

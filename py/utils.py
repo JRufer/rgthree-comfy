@@ -1,7 +1,7 @@
 import json
 import os
 import re
-
+import folder_paths
 
 class AnyType(str):
   """A special class that is always equal in not equal comparisons. Credit to pythongosssss"""
@@ -105,6 +105,82 @@ def save_json_file(file_path: str, data: dict):
   os.makedirs(os.path.dirname(file_path), exist_ok=True)
   with open(file_path, 'w+', encoding='UTF-8') as file:
     json.dump(data, file, sort_keys=False, indent=2, separators=(",", ": "))
+
+def load_json_from_file(file_path):
+    try:
+        with open(file_path, 'r') as json_file:
+            data = json.load(json_file)
+            return data
+    except FileNotFoundError:
+        print(f"File not found: {file_path}")
+        return None
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON in file: {file_path}")
+        raise
+
+def save_dict_to_json(data_dict, file_path):
+    try:
+        with open(file_path, 'w') as json_file:
+            json.dump(data_dict, json_file, indent=4)
+            print(f"Data saved to {file_path}")
+    except Exception as e:
+        print(f"Error saving JSON to file: {e}")
+
+def show_list(list_input):
+    i = 0
+    output = ""
+    for debug in list_input:
+        output += f"{debug},"
+        i+=1
+    return output
+
+def load_and_save_tags(lora_name, force_fetch):
+    json_tags_path = "./loras_tags.json"
+    lora_tags = load_json_from_file(json_tags_path)
+    output_tags = lora_tags.get(lora_name, None) if lora_tags is not None else None
+    if output_tags is not None:
+        output_tags_list = output_tags
+    else:
+        output_tags_list = []
+
+    lora_path = folder_paths.get_full_path("loras", lora_name)
+    if lora_tags is None or force_fetch or output_tags is None: # search on civitai only if no local cache or forced
+        print("[Lora-Auto-Trigger] calculating lora hash")
+        LORAsha256 = calculate_sha256(lora_path)
+        print("[Lora-Auto-Trigger] requesting infos")
+        model_info = get_model_version_info(LORAsha256)
+        if model_info is not None:
+            if "trainedWords" in model_info:
+                print("[Lora-Auto-Trigger] tags found!")
+                if lora_tags is None:
+                    lora_tags = {}
+                lora_tags[lora_name] = model_info["trainedWords"]
+                save_dict_to_json(lora_tags, json_tags_path)
+                output_tags_list = model_info["trainedWords"]
+        else:
+            print("[Lora-Auto-Trigger] No informations found.")
+            if lora_tags is None:
+                    lora_tags = {}
+            lora_tags[lora_name] = []
+            save_dict_to_json(lora_tags,json_tags_path)
+
+    return output_tags_list
+
+def get_model_version_info(hash_value):
+    api_url = f"https://civitai.com/api/v1/model-versions/by-hash/{hash_value}"
+    response = requests.get(api_url)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return None
+
+def calculate_sha256(file_path):
+    sha256_hash = hashlib.sha256()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(chunk)
+    return sha256_hash.hexdigest()
 
 def path_exists(path):
   """Checks if a path exists, accepting None type."""
